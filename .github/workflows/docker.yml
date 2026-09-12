@@ -1,4 +1,3 @@
-```yaml
 name: TaskFlow Docker
 
 on:
@@ -56,4 +55,3 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository }}/nginx:latest
-```

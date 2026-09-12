@@ -1,5 +1,11 @@
-﻿from fastapi import Depends, FastAPI, HTTPException
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logger = logging.getLogger("taskflow")
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 from backend.auth import (
@@ -12,6 +18,21 @@ from backend.database import get_connection
 
 
 app = FastAPI(title="TaskFlow API")
+
+Instrumentator().instrument(app).expose(app)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 security = HTTPBearer()
 
@@ -223,7 +244,10 @@ def create_project(
 
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
     finally:
         conn.close()
@@ -316,7 +340,10 @@ def update_project(
 
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
     finally:
         conn.close()
@@ -444,7 +471,10 @@ def create_task(
 
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
     finally:
         conn.close()
@@ -573,7 +603,10 @@ def update_task(
 
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
     finally:
         conn.close()
@@ -621,3 +654,4 @@ def delete_task(
 
     finally:
         conn.close()
+

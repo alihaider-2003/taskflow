@@ -12,5 +12,44 @@ services:
     volumes:
       - taskflow_postgres_data:/var/lib/postgresql/data
 
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: taskflow-api
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+    expose:
+      - "8000"
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskflow-frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - api
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: taskflow-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+      - frontend
+
 volumes:
   taskflow_postgres_data:

@@ -11,6 +11,11 @@ services:
       - "5433:5432"
     volumes:
       - taskflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskflow -d taskflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   api:
     build:
@@ -26,7 +31,24 @@ services:
     expose:
       - "8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskflow-frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - api
 
   nginx:
     build:
@@ -37,7 +59,33 @@ services:
     ports:
       - "8080:80"
     depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: taskflow-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
       - api
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: taskflow-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - taskflow_grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
 volumes:
   taskflow_postgres_data:
+  taskflow_grafana_data:

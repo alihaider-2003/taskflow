@@ -1,0 +1,55 @@
+name: TaskFlow CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: taskflow
+          POSTGRES_USER: taskflow
+          POSTGRES_PASSWORD: taskflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U taskflow -d taskflow"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Initialize database
+        env:
+          PGPASSWORD: taskflow
+        run: |
+          psql -h localhost -U taskflow -d taskflow -f database/schema.sql
+          psql -h localhost -U taskflow -d taskflow -f database/ci_seed.sql
+
+      - name: Run tests
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: taskflow
+          DB_USER: taskflow
+          DB_PASSWORD: taskflow
+          JWT_SECRET_KEY: ci-test-secret
+        run: pytest backend/test_main.py -q

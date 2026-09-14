@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import "./index.css";
 
-const API_URL = "/api"
+const API_URL = "/api";
 
 function App() {
   const [user, setUser] = useState(null);
+  const [guest, setGuest] = useState(false);
+
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -23,30 +26,40 @@ function App() {
 
   const token = localStorage.getItem("access_token");
 
-  const headers = {
-    Authorization: "Bearer " + token,
-  };
+  const loadDashboard = async (accessToken = token) => {
+    if (!accessToken) return;
 
-  const loadDashboard = async () => {
+    const authHeaders = {
+      Authorization: "Bearer " + accessToken,
+    };
+
     try {
       const [me, projectData, taskData] = await Promise.all([
-        axios.get(`${API_URL}/me`, { headers }),
-        axios.get(`${API_URL}/projects`, { headers }),
-        axios.get(`${API_URL}/tasks`, { headers }),
+        axios.get(`${API_URL}/me`, {
+          headers: authHeaders,
+        }),
+        axios.get(`${API_URL}/projects`, {
+          headers: authHeaders,
+        }),
+        axios.get(`${API_URL}/tasks`, {
+          headers: authHeaders,
+        }),
       ]);
 
       setUser(me.data);
-      setProjects(projectData.data);
-      setTasks(taskData.data);
+      setProjects(Array.isArray(projectData.data) ? projectData.data : []);
+      setTasks(Array.isArray(taskData.data) ? taskData.data : []);
     } catch {
       localStorage.removeItem("access_token");
       setUser(null);
+      setProjects([]);
+      setTasks([]);
     }
   };
 
   useEffect(() => {
     if (token) {
-      loadDashboard();
+      loadDashboard(token);
     }
   }, []);
 
@@ -59,16 +72,77 @@ function App() {
         password,
       });
 
-      localStorage.setItem("access_token", response.data.access_token);
+      const accessToken = response.data.access_token;
+
+      localStorage.setItem("access_token", accessToken);
+
+      setGuest(false);
       setMessage("");
-      await loadDashboard();
+
+      await loadDashboard(accessToken);
     } catch (error) {
       setMessage(error.response?.data?.detail || "Login failed");
     }
   };
 
+  const enterGuestMode = () => {
+    setGuest(true);
+    setUser({
+      name: "Guest",
+      email: "demo@taskflow.app",
+    });
+
+    setProjects([
+      {
+        id: 1,
+        name: "Website Redesign",
+        description: "Redesign the company website.",
+      },
+      {
+        id: 2,
+        name: "Mobile App",
+        description: "Prepare the first mobile app release.",
+      },
+    ]);
+
+    setTasks([
+      {
+        id: 1,
+        project_id: 1,
+        title: "Design homepage",
+        description: "Create the new homepage layout.",
+        status: "done",
+        priority: "high",
+      },
+      {
+        id: 2,
+        project_id: 1,
+        title: "Implement dashboard",
+        description: "Build the main dashboard UI.",
+        status: "in_progress",
+        priority: "medium",
+      },
+      {
+        id: 3,
+        project_id: 2,
+        title: "Prepare API integration",
+        description: "Connect the mobile app with the API.",
+        status: "todo",
+        priority: "medium",
+      },
+    ]);
+
+    setMessage("");
+  };
+
   const createProject = async (event) => {
     event.preventDefault();
+
+    if (guest) return;
+
+    const authHeaders = {
+      Authorization: "Bearer " + localStorage.getItem("access_token"),
+    };
 
     try {
       await axios.post(
@@ -77,14 +151,16 @@ function App() {
           name: projectName,
           description: projectDescription,
         },
-        { headers }
+        {
+          headers: authHeaders,
+        }
       );
 
       setProjectName("");
       setProjectDescription("");
       setShowProjectForm(false);
 
-      await loadDashboard();
+      await loadDashboard(localStorage.getItem("access_token"));
     } catch (error) {
       setMessage(
         error.response?.data?.detail || "Failed to create project"
@@ -93,14 +169,35 @@ function App() {
   };
 
   const deleteProject = async (id) => {
+    if (guest) return;
+
     if (!confirm("Delete this project?")) return;
 
-    await axios.delete(`${API_URL}/projects/${id}`, { headers });
-    await loadDashboard();
+    const authHeaders = {
+      Authorization: "Bearer " + localStorage.getItem("access_token"),
+    };
+
+    try {
+      await axios.delete(`${API_URL}/projects/${id}`, {
+        headers: authHeaders,
+      });
+
+      await loadDashboard(localStorage.getItem("access_token"));
+    } catch (error) {
+      setMessage(
+        error.response?.data?.detail || "Failed to delete project"
+      );
+    }
   };
 
   const createTask = async (event) => {
     event.preventDefault();
+
+    if (guest) return;
+
+    const authHeaders = {
+      Authorization: "Bearer " + localStorage.getItem("access_token"),
+    };
 
     try {
       await axios.post(
@@ -112,7 +209,9 @@ function App() {
           status: "todo",
           priority: "medium",
         },
-        { headers }
+        {
+          headers: authHeaders,
+        }
       );
 
       setTaskTitle("");
@@ -120,7 +219,7 @@ function App() {
       setTaskProjectId("");
       setShowTaskForm(false);
 
-      await loadDashboard();
+      await loadDashboard(localStorage.getItem("access_token"));
     } catch (error) {
       setMessage(
         error.response?.data?.detail || "Failed to create task"
@@ -129,14 +228,24 @@ function App() {
   };
 
   const updateTask = async (id, field, value) => {
+    if (guest) return;
+
+    const authHeaders = {
+      Authorization: "Bearer " + localStorage.getItem("access_token"),
+    };
+
     try {
       await axios.put(
         `${API_URL}/tasks/${id}`,
-        { [field]: value },
-        { headers }
+        {
+          [field]: value,
+        },
+        {
+          headers: authHeaders,
+        }
       );
 
-      await loadDashboard();
+      await loadDashboard(localStorage.getItem("access_token"));
     } catch (error) {
       setMessage(
         error.response?.data?.detail || "Failed to update task"
@@ -145,17 +254,35 @@ function App() {
   };
 
   const deleteTask = async (id) => {
+    if (guest) return;
+
     if (!confirm("Delete this task?")) return;
 
-    await axios.delete(`${API_URL}/tasks/${id}`, { headers });
-    await loadDashboard();
+    const authHeaders = {
+      Authorization: "Bearer " + localStorage.getItem("access_token"),
+    };
+
+    try {
+      await axios.delete(`${API_URL}/tasks/${id}`, {
+        headers: authHeaders,
+      });
+
+      await loadDashboard(localStorage.getItem("access_token"));
+    } catch (error) {
+      setMessage(
+        error.response?.data?.detail || "Failed to delete task"
+      );
+    }
   };
 
   const logout = () => {
     localStorage.removeItem("access_token");
+
     setUser(null);
+    setGuest(false);
     setProjects([]);
     setTasks([]);
+    setMessage("");
   };
 
   if (!user) {
@@ -187,15 +314,23 @@ function App() {
             <button type="submit">Sign in</button>
           </form>
 
+          <button
+            type="button"
+            className="guest-button"
+            onClick={enterGuestMode}
+          >
+            Continue as Guest
+          </button>
+
           {message && <div className="error">{message}</div>}
         </div>
       </div>
     );
   }
 
-  const completed = tasks.filter(
-    (task) => task.status === "done"
-  ).length;
+  const completed = Array.isArray(tasks)
+    ? tasks.filter((task) => task.status === "done").length
+    : 0;
 
   return (
     <div className="app-shell">
@@ -212,7 +347,7 @@ function App() {
         </nav>
 
         <button className="logout" onClick={logout}>
-          Logout
+          {guest ? "Exit Demo" : "Logout"}
         </button>
       </aside>
 
@@ -228,6 +363,12 @@ function App() {
             <span>{user.email}</span>
           </div>
         </header>
+
+        {guest && (
+          <div className="demo-banner">
+            Demo Mode — You are viewing sample TaskFlow data.
+          </div>
+        )}
 
         <section className="welcome">
           <h2>Welcome, {user.name} 👋</h2>
@@ -257,25 +398,19 @@ function App() {
               <h2>Your Projects</h2>
 
               <button
-                onClick={() =>
-                  setShowProjectForm(!showProjectForm)
-                }
+                onClick={() => setShowProjectForm(!showProjectForm)}
+                disabled={guest}
               >
                 + New Project
               </button>
             </div>
 
-            {showProjectForm && (
-              <form
-                onSubmit={createProject}
-                className="inline-form"
-              >
+            {showProjectForm && !guest && (
+              <form onSubmit={createProject} className="inline-form">
                 <input
                   placeholder="Project name"
                   value={projectName}
-                  onChange={(e) =>
-                    setProjectName(e.target.value)
-                  }
+                  onChange={(e) => setProjectName(e.target.value)}
                   required
                 />
 
@@ -292,10 +427,7 @@ function App() {
             )}
 
             {projects.map((project) => (
-              <div
-                className="project-item"
-                key={project.id}
-              >
+              <div className="project-item" key={project.id}>
                 <div>
                   <h3>{project.name}</h3>
                   <p>{project.description}</p>
@@ -303,9 +435,8 @@ function App() {
 
                 <button
                   className="danger"
-                  onClick={() =>
-                    deleteProject(project.id)
-                  }
+                  onClick={() => deleteProject(project.id)}
+                  disabled={guest}
                 >
                   Delete
                 </button>
@@ -318,36 +449,24 @@ function App() {
               <h2>Your Tasks</h2>
 
               <button
-                onClick={() =>
-                  setShowTaskForm(!showTaskForm)
-                }
-                disabled={!projects.length}
+                onClick={() => setShowTaskForm(!showTaskForm)}
+                disabled={guest || !projects.length}
               >
                 + New Task
               </button>
             </div>
 
-            {showTaskForm && (
-              <form
-                onSubmit={createTask}
-                className="inline-form"
-              >
+            {showTaskForm && !guest && (
+              <form onSubmit={createTask} className="inline-form">
                 <select
                   value={taskProjectId}
-                  onChange={(e) =>
-                    setTaskProjectId(e.target.value)
-                  }
+                  onChange={(e) => setTaskProjectId(e.target.value)}
                   required
                 >
-                  <option value="">
-                    Select project
-                  </option>
+                  <option value="">Select project</option>
 
                   {projects.map((project) => (
-                    <option
-                      key={project.id}
-                      value={project.id}
-                    >
+                    <option key={project.id} value={project.id}>
                       {project.name}
                     </option>
                   ))}
@@ -356,9 +475,7 @@ function App() {
                 <input
                   placeholder="Task title"
                   value={taskTitle}
-                  onChange={(e) =>
-                    setTaskTitle(e.target.value)
-                  }
+                  onChange={(e) => setTaskTitle(e.target.value)}
                   required
                 />
 
@@ -375,10 +492,7 @@ function App() {
             )}
 
             {tasks.map((task) => (
-              <div
-                className="task-item"
-                key={task.id}
-              >
+              <div className="task-item" key={task.id}>
                 <div>
                   <h3>{task.title}</h3>
                   <p>{task.description}</p>
@@ -394,6 +508,7 @@ function App() {
                         e.target.value
                       )
                     }
+                    disabled={guest}
                   >
                     <option value="todo">Todo</option>
                     <option value="in_progress">
@@ -411,6 +526,7 @@ function App() {
                         e.target.value
                       )
                     }
+                    disabled={guest}
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -419,9 +535,8 @@ function App() {
 
                   <button
                     className="danger"
-                    onClick={() =>
-                      deleteTask(task.id)
-                    }
+                    onClick={() => deleteTask(task.id)}
+                    disabled={guest}
                   >
                     Delete
                   </button>
